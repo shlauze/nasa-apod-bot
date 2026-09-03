@@ -1,8 +1,12 @@
 import asyncio
 import html
 import logging
+import os
 import random
 from datetime import date, datetime
+
+# pyrefly: ignore [missing-import]
+from aiohttp import web
 
 # pyrefly: ignore [missing-import]
 from aiogram import Bot, Dispatcher, F
@@ -481,6 +485,28 @@ async def send_apod(
         await message.answer(caption_full, reply_markup=keyboard)
 
 
+async def handle_health_check(request: web.Request) -> web.Response:
+    return web.Response(text="NASA APOD Bot is running OK 🚀", content_type="text/plain")
+
+
+async def start_web_server() -> web.AppRunner | None:
+    port = int(os.getenv("PORT", "0"))
+    if not port:
+        # Локальный запуск без PORT
+        return None
+
+    app = web.Application()
+    app.router.add_get("/", handle_health_check)
+    app.router.add_get("/health", handle_health_check)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info("🌐 Web-сервер для healthcheck запущен на порту %s", port)
+    return runner
+
+
 # --------------------------- ТОЧКА ВХОДА --------------------------- #
 
 
@@ -488,6 +514,9 @@ async def main():
     if not BOT_TOKEN:
         logger.error("BOT_TOKEN не задан в .env!")
         return
+
+    # Запуск web-сервера для Render / хостингов, если передан PORT
+    runner = await start_web_server()
 
     bot = Bot(
         token=BOT_TOKEN,
@@ -505,6 +534,8 @@ async def main():
     try:
         await dp.start_polling(bot)
     finally:
+        if runner:
+            await runner.cleanup()
         await bot.session.close()
 
 
