@@ -37,6 +37,7 @@ from locales import format_date_localized, get_text
 from nasa import MIN_DATE, get_apod
 from states import ApodStates
 from storage import get_user_language, set_user_language
+from translator import translate_text
 
 logging.basicConfig(
     level=logging.INFO,
@@ -422,8 +423,17 @@ async def send_apod(
     except Exception:
         pass
 
-    title = html.escape(data.get("title", "Untitled"))
-    explanation = html.escape(data.get("explanation", "No description available."))
+    raw_title = data.get("title", "Untitled")
+    raw_explanation = data.get("explanation", "No description available.")
+
+    if lang != "en":
+        raw_title, raw_explanation = await asyncio.gather(
+            translate_text(raw_title, lang),
+            translate_text(raw_explanation, lang),
+        )
+
+    title = html.escape(raw_title)
+    explanation = html.escape(raw_explanation)
     apod_url = data.get("url", "")
     hd_url = data.get("hdurl")
     media_type = data.get("media_type", "image")
